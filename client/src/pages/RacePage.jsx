@@ -139,11 +139,9 @@ const RacePage = () => {
     let isCorrect = false;
     if (typedWord === targetWord) {
       newStatuses[currentWordIndex] = 'correct';
-      setCorrectWords(prev => prev + 1);
       isCorrect = true;
     } else {
       newStatuses[currentWordIndex] = 'incorrect';
-      setIncorrectWords(prev => prev + 1);
     }
     
     setWordStatuses(newStatuses);
@@ -152,12 +150,23 @@ const RacePage = () => {
     const nextIndex = currentWordIndex + 1;
     setCurrentWordIndex(nextIndex);
     
+    // Calculate stats with the new word included
+    const newCorrectWords = correctWords + (isCorrect ? 1 : 0);
+    const newIncorrectWords = incorrectWords + (isCorrect ? 0 : 1);
+    
+    // Update state
+    if (isCorrect) {
+      setCorrectWords(newCorrectWords);
+    } else {
+      setIncorrectWords(newIncorrectWords);
+    }
+    
     // Calculate progress and update server
     const progress = Math.round((nextIndex / words.length) * 100);
     const elapsed = (Date.now() - startTime) / 1000 / 60;
-    const currentWpm = Math.round((correctWords + (isCorrect ? 1 : 0)) / elapsed) || 0;
-    const totalTyped = correctWords + incorrectWords + 1;
-    const acc = Math.round(((correctWords + (isCorrect ? 1 : 0)) / totalTyped) * 100);
+    const currentWpm = Math.round(newCorrectWords / elapsed) || 0;
+    const totalTyped = newCorrectWords + newIncorrectWords;
+    const acc = totalTyped > 0 ? Math.round((newCorrectWords / totalTyped) * 100) : 100;
     
     socket.emit('update-progress', {
       roomCode: race.roomCode,

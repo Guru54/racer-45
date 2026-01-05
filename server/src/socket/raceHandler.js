@@ -170,7 +170,69 @@ const createRaceWithBots = async (io, queueEntry, mode) => {
   }
 };
 
-// Countdown before race starts
+// Check if race is complete and finalize
+const checkRaceCompletion = async (io, roomCode) => {
+  try {
+    const race = await Race.findOne({ roomCode: roomCode.toUpperCase() });
+    
+    if (!race || race.status === 'finished') {
+      return;
+    }
+
+    const allFinished = race.participants.every(p => p.finishedAt);
+
+    if (allFinished) {
+      race.status = 'finished';
+      race.endedAt = new Date();
+
+      race.participants.sort((a, b) => {
+        return new Date(a.finishedAt) - new Date(b.finishedAt);
+      });
+
+      race.participants.forEach((p, index) => {
+        p.position = index + 1;
+      });
+
+      await race.save();
+
+      // Update stats only for real users (not bots)
+      const winner = race.participants[0];
+      if (!winner.isBot) {
+        const user = await User.findById(winner.userId);
+        if (user) {
+          user.stats.racesWon += 1;
+          user.stats.totalRaces += 1;
+          await user.save();
+        }
+      }
+
+      for (let i = 1; i < race.participants.length; i++) {
+        if (!race.participants[i].isBot) {
+          const loserUser = await User.findById(race.participants[i].userId);
+          if (loserUser) {
+            loserUser.stats.totalRaces += 1;
+            await loserUser.save();
+          }
+        }
+      }
+
+      // Clean up bot intervals
+      Object.keys(botIntervals).forEach(key => {
+        if (key.startsWith(roomCode)) {
+          if (botIntervals[key].stop) {
+            botIntervals[key].stop();
+          }
+          delete botIntervals[key];
+        }
+      });
+
+      io.to(roomCode).emit('race-finished', { race });
+      console.log(`Race ${roomCode} completed`);
+    }
+  } catch (error) {
+    console.error('Error checking race completion:', error);
+  }
+};
 const startCountdown = async (io, roomCode, race) => {
   let countdown = 5;
   
@@ -199,12 +261,17 @@ const startCountdown = async (io, roomCode, race) => {
             return await Race.findOne({ roomCode: roomCode.toUpperCase() });
           };
           
+          const onBotFinish = async () => {
+            await checkRaceCompletion(io, roomCode);
+          };
+          
           const botSimulation = simulateBotTyping(
             participant,
             totalWords,
             io,
             roomCode,
-            getRace
+            getRace,
+            onBotFinish
           );
           botIntervals[`${roomCode}_${participant.userId}`] = botSimulation;
         }
@@ -383,55 +450,8 @@ const socketHandler = (io) => {
           await race.save();
         }
 
-        const allFinished = race.participants.every(p => p.finishedAt);
-
-        if (allFinished) {
-          race.status = 'finished';
-          race.endedAt = new Date();
-
-          race.participants.sort((a, b) => {
-            return new Date(a.finishedAt) - new Date(b.finishedAt);
-          });
-
-          race.participants.forEach((p, index) => {
-            p.position = index + 1;
-          });
-
-          await race.save();
-
-          // Update stats only for real users (not bots)
-          const winner = race.participants[0];
-          if (!winner.isBot) {
-            const user = await User.findById(winner.userId);
-            if (user) {
-              user.stats.racesWon += 1;
-              user.stats.totalRaces += 1;
-              await user.save();
-            }
-          }
-
-          for (let i = 1; i < race.participants.length; i++) {
-            if (!race.participants[i].isBot) {
-              const loserUser = await User.findById(race.participants[i].userId);
-              if (loserUser) {
-                loserUser.stats.totalRaces += 1;
-                await loserUser.save();
-              }
-            }
-          }
-
-          // Clean up bot intervals
-          Object.keys(botIntervals).forEach(key => {
-            if (key.startsWith(roomCode)) {
-              if (botIntervals[key].stop) {
-                botIntervals[key].stop();
-              }
-              delete botIntervals[key];
-            }
-          });
-
-          io.to(roomCode).emit('race-finished', { race });
-        }
+        // Check if race is complete
+        await checkRaceCompletion(io, roomCode);
       } catch (error) {
         console.error('Error finishing race:', error);
       }
@@ -441,36 +461,6 @@ const socketHandler = (io) => {
     socket.on('leave-race', ({ roomCode }) => {
       socket.leave(roomCode);
       console.log(`User left race room ${roomCode}`);
-    });
-
-    // Handle bot finishing (called from botSimulator)
-    socket.on('bot-finished-internal', async ({ roomCode, botUserId }) => {
-      try {
-        const race = await Race.findOne({ roomCode: roomCode.toUpperCase() });
-        
-        if (!race) {
-          return;
-        }
-
-        const participant = race.participants.find(
-          p => p.userId.toString() === botUserId.toString()
-        );
-
-        if (participant && !participant.finishedAt) {
-          participant.finishedAt = new Date();
-          participant.progress = 100;
-          await race.save();
-          
-          // Check if all finished
-          const allFinished = race.participants.every(p => p.finishedAt);
-          if (allFinished) {
-            // Trigger race finish
-            socket.emit('finish-race', { roomCode, userId: botUserId });
-          }
-        }
-      } catch (error) {
-        console.error('Error handling bot finish:', error);
-      }
     });
 
     socket.on('disconnect', () => {

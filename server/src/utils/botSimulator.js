@@ -15,15 +15,17 @@ const randomBetween = (min, max) => {
  * @param {Object} io - Socket.io instance
  * @param {String} roomCode - Race room code
  * @param {Function} getRace - Function to get updated race from database
+ * @param {Function} onBotFinish - Callback when bot finishes typing
  * @returns {Object} - Interval ID for cleanup
  */
-const simulateBotTyping = (bot, totalWords, io, roomCode, getRace) => {
+const simulateBotTyping = (bot, totalWords, io, roomCode, getRace, onBotFinish) => {
   const speedConfig = BOT_SPEEDS[bot.botDifficulty] || BOT_SPEEDS.medium;
   const baseWpm = randomBetween(speedConfig.minWpm, speedConfig.maxWpm);
   const msPerWord = 60000 / baseWpm;
   
   let wordsTyped = 0;
   let stopped = false;
+  let updateCounter = 0;
   
   const typeInterval = setInterval(async () => {
     if (stopped) {
@@ -32,44 +34,53 @@ const simulateBotTyping = (bot, totalWords, io, roomCode, getRace) => {
     }
 
     wordsTyped++;
+    updateCounter++;
     const progress = Math.min(Math.round((wordsTyped / totalWords) * 100), 100);
     
-    // Add slight randomness to feel natural
-    const variance = randomBetween(-5, 5);
+    // Add slight randomness to feel natural (±10% of base WPM)
+    const variance = Math.floor(baseWpm * (Math.random() * 0.2 - 0.1));
     const currentWpm = Math.max(baseWpm + variance, 1);
     
     // Calculate accuracy with slight variations (bots are generally accurate)
     const accuracy = randomBetween(90, 98);
     
-    // Update race in database
-    const race = await getRace();
-    if (race) {
-      const participant = race.participants.find(
-        p => p.userId.toString() === bot.userId.toString()
-      );
+    // Update race in database every 3 words or when finished to reduce DB load
+    if (updateCounter >= 3 || wordsTyped >= totalWords) {
+      updateCounter = 0;
       
-      if (participant) {
-        participant.progress = progress;
-        participant.wpm = currentWpm;
-        participant.accuracy = accuracy;
+      const race = await getRace();
+      if (race) {
+        const participant = race.participants.find(
+          p => p.userId.toString() === bot.userId.toString()
+        );
         
-        if (wordsTyped >= totalWords && !participant.finishedAt) {
-          participant.finishedAt = new Date();
+        if (participant) {
+          participant.progress = progress;
+          participant.wpm = currentWpm;
+          participant.accuracy = accuracy;
+          
+          if (wordsTyped >= totalWords && !participant.finishedAt) {
+            participant.finishedAt = new Date();
+          }
+          
+          await race.save();
+          
+          // Emit progress update
+          io.to(roomCode).emit('progress-updated', {
+            participants: race.participants
+          });
         }
-        
-        await race.save();
-        
-        // Emit progress update
-        io.to(roomCode).emit('progress-updated', {
-          participants: race.participants
-        });
       }
     }
     
     if (wordsTyped >= totalWords) {
       clearInterval(typeInterval);
+      // Call the finish callback
+      if (onBotFinish) {
+        await onBotFinish();
+      }
     }
-  }, msPerWord + randomBetween(-100, 200)); // Natural variance in typing speed
+  }, msPerWord + Math.floor(msPerWord * (Math.random() * 0.2 - 0.1))); // ±10% variance
   
   return {
     stop: () => {
