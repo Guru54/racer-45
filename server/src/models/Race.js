@@ -62,7 +62,7 @@ const raceSchema = new mongoose.Schema({
   participants: [participantSchema],
   status: {
     type: String,
-    enum: ['waiting', 'started', 'finished'],
+    enum: ['waiting', 'countdown', 'started', 'finished'],
     default: 'waiting'
   },
   textContent: {

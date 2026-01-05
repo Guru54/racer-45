@@ -195,12 +195,16 @@ const startCountdown = async (io, roomCode, race) => {
       
       race.participants.forEach(participant => {
         if (participant.isBot) {
+          const getRace = async () => {
+            return await Race.findOne({ roomCode: roomCode.toUpperCase() });
+          };
+          
           const botSimulation = simulateBotTyping(
             participant,
             totalWords,
             io,
             roomCode,
-            race
+            getRace
           );
           botIntervals[`${roomCode}_${participant.userId}`] = botSimulation;
         }

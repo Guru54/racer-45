@@ -14,10 +14,10 @@ const randomBetween = (min, max) => {
  * @param {Number} totalWords - Total number of words in the text
  * @param {Object} io - Socket.io instance
  * @param {String} roomCode - Race room code
- * @param {Object} race - Race object from database
+ * @param {Function} getRace - Function to get updated race from database
  * @returns {Object} - Interval ID for cleanup
  */
-const simulateBotTyping = (bot, totalWords, io, roomCode, race) => {
+const simulateBotTyping = (bot, totalWords, io, roomCode, getRace) => {
   const speedConfig = BOT_SPEEDS[bot.botDifficulty] || BOT_SPEEDS.medium;
   const baseWpm = randomBetween(speedConfig.minWpm, speedConfig.maxWpm);
   const msPerWord = 60000 / baseWpm;
@@ -25,7 +25,7 @@ const simulateBotTyping = (bot, totalWords, io, roomCode, race) => {
   let wordsTyped = 0;
   let stopped = false;
   
-  const typeInterval = setInterval(() => {
+  const typeInterval = setInterval(async () => {
     if (stopped) {
       clearInterval(typeInterval);
       return;
@@ -41,23 +41,33 @@ const simulateBotTyping = (bot, totalWords, io, roomCode, race) => {
     // Calculate accuracy with slight variations (bots are generally accurate)
     const accuracy = randomBetween(90, 98);
     
-    io.to(roomCode).emit('progress-updated', {
-      userId: bot.userId,
-      username: bot.username,
-      progress,
-      wpm: currentWpm,
-      accuracy,
-      isBot: true,
-      participants: race.participants
-    });
+    // Update race in database
+    const race = await getRace();
+    if (race) {
+      const participant = race.participants.find(
+        p => p.userId.toString() === bot.userId.toString()
+      );
+      
+      if (participant) {
+        participant.progress = progress;
+        participant.wpm = currentWpm;
+        participant.accuracy = accuracy;
+        
+        if (wordsTyped >= totalWords && !participant.finishedAt) {
+          participant.finishedAt = new Date();
+        }
+        
+        await race.save();
+        
+        // Emit progress update
+        io.to(roomCode).emit('progress-updated', {
+          participants: race.participants
+        });
+      }
+    }
     
     if (wordsTyped >= totalWords) {
       clearInterval(typeInterval);
-      // Bot finished
-      io.to(roomCode).emit('bot-finished', {
-        userId: bot.userId,
-        username: bot.username
-      });
     }
   }, msPerWord + randomBetween(-100, 200)); // Natural variance in typing speed
   
