@@ -117,6 +117,20 @@ const RacePage = () => {
     setMatchmakingStatus(null);
   };
 
+  const resetRaceState = () => {
+    setRace(null);
+    setCountdown(null);
+    setInput('');
+    setCurrentWordIndex(0);
+    setWordStatuses([]);
+    setWords([]);
+    setCorrectWords(0);
+    setIncorrectWords(0);
+    setStartTime(null);
+    setWpm(0);
+    setAccuracy(100);
+  };
+
   const handleInputChange = (e) => {
     if (race?.status !== 'started') return;
 
@@ -399,19 +413,7 @@ const RacePage = () => {
                 {race.participants.find(p => p.position === 1)?.username}
               </span> {race.participants.find(p => p.position === 1)?.isBot ? '🤖' : '🏆'}
             </div>
-            <button onClick={() => {
-              setRace(null);
-              setCountdown(null);
-              setInput('');
-              setCurrentWordIndex(0);
-              setWordStatuses([]);
-              setWords([]);
-              setCorrectWords(0);
-              setIncorrectWords(0);
-              setStartTime(null);
-              setWpm(0);
-              setAccuracy(100);
-            }} className="btn-primary">
+            <button onClick={resetRaceState} className="btn-primary">
               Back to Lobby
             </button>
           </div>
