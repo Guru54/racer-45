@@ -10,6 +10,15 @@ const participantSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  isBot: {
+    type: Boolean,
+    default: false
+  },
+  botDifficulty: {
+    type: String,
+    enum: ['easy', 'medium', 'hard'],
+    default: null
+  },
   wpm: {
     type: Number,
     default: 0
