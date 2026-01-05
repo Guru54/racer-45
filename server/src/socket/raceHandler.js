@@ -17,6 +17,7 @@ const socketHandler = (io) => {
 
         socket.join(roomCode);
         socket.roomCode = roomCode;
+        socket.userId = userId;
         
         io.to(roomCode).emit('participant-joined', {
           participants: race.participants,
@@ -39,7 +40,7 @@ const socketHandler = (io) => {
           return;
         }
 
-        if (race.hostId.toString() !== socket.userId) {
+        if (race.hostId.toString() !== socket.userId.toString()) {
           socket.emit('race-error', { message: 'Only host can start the race' });
           return;
         }

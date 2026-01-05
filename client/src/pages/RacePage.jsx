@@ -98,7 +98,7 @@ const RacePage = () => {
   };
 
   const startRace = () => {
-    if (race.hostId !== user._id) {
+    if (race.hostId.toString() !== user._id.toString()) {
       toast.error('Only the host can start the race');
       return;
     }
@@ -249,7 +249,7 @@ const RacePage = () => {
               >
                 <div className="flex items-center space-x-3">
                   <span className="font-semibold">{participant.username}</span>
-                  {participant.userId === race.hostId && (
+                  {participant.userId.toString() === race.hostId.toString() && (
                     <span className="px-2 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-800 dark:text-primary-300 text-xs rounded">
                       Host
                     </span>
@@ -286,7 +286,7 @@ const RacePage = () => {
           </div>
         </div>
 
-        {race.status === 'waiting' && race.hostId === user._id && (
+        {race.status === 'waiting' && race.hostId.toString() === user._id.toString() && (
           <div className="text-center mb-6">
             <button onClick={startRace} className="btn-primary text-lg px-8 py-3">
               Start Race

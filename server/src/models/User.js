@@ -23,7 +23,9 @@ const userSchema = new mongoose.Schema({
   },
   avatar: {
     type: String,
-    default: 'https://ui-avatars.com/api/?background=random'
+    default: function() {
+      return `https://ui-avatars.com/api/?name=${encodeURIComponent(this.username || 'User')}&background=random`;
+    }
   },
   authProvider: {
     type: String,
