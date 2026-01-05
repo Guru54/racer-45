@@ -2,8 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 
 const TypingArena = ({ text, onComplete, duration = 60 }) => {
   const [input, setInput] = useState('');
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [errors, setErrors] = useState(0);
+  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [wordStatuses, setWordStatuses] = useState([]);
+  const [words, setWords] = useState([]);
+  const [correctWords, setCorrectWords] = useState(0);
+  const [incorrectWords, setIncorrectWords] = useState(0);
   const [startTime, setStartTime] = useState(null);
   const [timeLeft, setTimeLeft] = useState(duration);
   const [isActive, setIsActive] = useState(false);
@@ -15,7 +18,12 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  }, []);
+    
+    // Initialize words array from text
+    const wordArray = text.trim().split(/\s+/);
+    setWords(wordArray);
+    setWordStatuses(new Array(wordArray.length).fill('pending'));
+  }, [text]);
 
   useEffect(() => {
     let interval = null;
@@ -40,11 +48,14 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
   useEffect(() => {
     if (startTime && isActive) {
       const elapsed = (Date.now() - startTime) / 1000 / 60;
-      const wordsTyped = input.trim().split(/\s+/).length;
-      const currentWpm = Math.round(wordsTyped / elapsed) || 0;
+      const currentWpm = Math.round(correctWords / elapsed) || 0;
       setWpm(currentWpm);
+      
+      const totalTyped = correctWords + incorrectWords;
+      const acc = totalTyped > 0 ? Math.round((correctWords / totalTyped) * 100) : 100;
+      setAccuracy(acc);
     }
-  }, [input, startTime, isActive]);
+  }, [correctWords, incorrectWords, startTime, isActive]);
 
   const handleInputChange = (e) => {
     const value = e.target.value;
@@ -54,25 +65,36 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
       setStartTime(Date.now());
     }
 
-    if (value.length > text.length) {
-      return;
+    // Check if space is pressed to submit word
+    if (value.endsWith(' ')) {
+      submitWord(value.trim());
+    } else {
+      setInput(value);
     }
+  };
 
-    setInput(value);
-    setCurrentIndex(value.length);
+  const submitWord = (typedWord) => {
+    if (currentWordIndex >= words.length) return;
 
-    let errorCount = 0;
-    for (let i = 0; i < value.length; i++) {
-      if (value[i] !== text[i]) {
-        errorCount++;
-      }
+    const targetWord = words[currentWordIndex];
+    const newStatuses = [...wordStatuses];
+    
+    if (typedWord === targetWord) {
+      newStatuses[currentWordIndex] = 'correct';
+      setCorrectWords(prev => prev + 1);
+    } else {
+      newStatuses[currentWordIndex] = 'incorrect';
+      setIncorrectWords(prev => prev + 1);
     }
-    setErrors(errorCount);
-
-    const acc = value.length > 0 ? Math.round(((value.length - errorCount) / value.length) * 100) : 100;
-    setAccuracy(acc);
-
-    if (value === text) {
+    
+    setWordStatuses(newStatuses);
+    setInput('');
+    
+    const nextIndex = currentWordIndex + 1;
+    setCurrentWordIndex(nextIndex);
+    
+    // Check if all words are completed
+    if (nextIndex >= words.length) {
       finishTest();
     }
   };
@@ -83,7 +105,7 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
     onComplete({
       wpm,
       accuracy,
-      errors,
+      errors: incorrectWords,
       duration: timeTaken,
       textContent: text
     });
@@ -91,8 +113,10 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
 
   const restart = () => {
     setInput('');
-    setCurrentIndex(0);
-    setErrors(0);
+    setCurrentWordIndex(0);
+    setWordStatuses(new Array(words.length).fill('pending'));
+    setCorrectWords(0);
+    setIncorrectWords(0);
     setStartTime(null);
     setTimeLeft(duration);
     setIsActive(false);
@@ -104,18 +128,20 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
   };
 
   const renderText = () => {
-    return text.split('').map((char, index) => {
-      let className = 'char-pending';
+    return words.map((word, index) => {
+      let className = 'word-box word-pending';
       
-      if (index < currentIndex) {
-        className = input[index] === char ? 'char-correct' : 'char-incorrect';
-      } else if (index === currentIndex) {
-        className = 'char-current';
+      if (wordStatuses[index] === 'correct') {
+        className = 'word-box word-correct';
+      } else if (wordStatuses[index] === 'incorrect') {
+        className = 'word-box word-incorrect';
+      } else if (index === currentWordIndex) {
+        className = 'word-box word-current';
       }
 
       return (
         <span key={index} className={className}>
-          {char}
+          {word}
         </span>
       );
     });
@@ -139,7 +165,7 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-red-600 dark:text-red-400">
-              {errors}
+              {incorrectWords}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400">Errors</div>
           </div>
@@ -154,7 +180,7 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
       </div>
 
       <div className="card">
-        <div className="text-2xl leading-relaxed font-mono mb-4 select-none">
+        <div className="word-container select-none">
           {renderText()}
         </div>
         

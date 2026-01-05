@@ -41,3 +41,28 @@
 .char-current {
   @apply bg-yellow-200 dark:bg-yellow-800/50;
 }
+
+/* Word-by-word typing styles */
+.word-container {
+  @apply flex flex-wrap gap-2 mb-4 text-xl leading-relaxed;
+}
+
+.word-box {
+  @apply px-3 py-2 rounded-lg font-mono transition-all duration-200;
+}
+
+.word-correct {
+  @apply bg-green-500 text-white;
+}
+
+.word-incorrect {
+  @apply bg-red-500 text-white;
+}
+
+.word-current {
+  @apply border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-gray-900 dark:text-white;
+}
+
+.word-pending {
+  @apply text-gray-400 dark:text-gray-500;
+}
