@@ -10,6 +10,15 @@ const participantSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  isBot: {
+    type: Boolean,
+    default: false
+  },
+  botDifficulty: {
+    type: String,
+    enum: ['easy', 'medium', 'hard'],
+    default: null
+  },
   wpm: {
     type: Number,
     default: 0
@@ -53,7 +62,7 @@ const raceSchema = new mongoose.Schema({
   participants: [participantSchema],
   status: {
     type: String,
-    enum: ['waiting', 'started', 'finished'],
+    enum: ['waiting', 'countdown', 'started', 'finished'],
     default: 'waiting'
   },
   textContent: {
