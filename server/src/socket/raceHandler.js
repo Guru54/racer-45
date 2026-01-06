@@ -447,7 +447,20 @@ const socketHandler = (io) => {
 
         if (participant && !participant.finishedAt) {
           participant.finishedAt = new Date();
+          
+          // Calculate rank based on who has finished
+          const finishedCount = race.participants.filter(p => p.finishedAt).length;
+          participant.position = finishedCount;
+          
           await race.save();
+          
+          // Tell the specific player their rank
+          socket.emit('player-finished', { rank: finishedCount });
+          
+          // Inform others about the update
+          io.to(roomCode).emit('progress-updated', {
+            participants: race.participants
+          });
         }
 
         // Check if race is complete

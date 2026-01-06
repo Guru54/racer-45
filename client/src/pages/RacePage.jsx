@@ -18,6 +18,7 @@ const RacePage = () => {
   const [startTime, setStartTime] = useState(null);
   const [wpm, setWpm] = useState(0);
   const [accuracy, setAccuracy] = useState(100);
+  const [userRank, setUserRank] = useState(null);
   const inputRef = useRef(null);
 
   const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
@@ -25,6 +26,10 @@ const RacePage = () => {
   useEffect(() => {
     const newSocket = io(SOCKET_URL);
     setSocket(newSocket);
+
+    // ... (rest of the socket setup stays similar, but I'll add the new listener)
+    // Actually I need to include the whole block to be safe with replace_string_in_file
+
 
     // Matchmaking status updates
     newSocket.on('matchmaking-status', ({ status, message }) => {
@@ -75,6 +80,11 @@ const RacePage = () => {
       toast.success('Race finished!');
     });
 
+    newSocket.on('player-finished', ({ rank }) => {
+      setUserRank(rank);
+      toast.success(`Finished! You ranked #${rank} 🏁`);
+    });
+
     newSocket.on('race-error', ({ message }) => {
       toast.error(message);
       setMatchmakingStatus(null);
@@ -84,6 +94,16 @@ const RacePage = () => {
       newSocket.close();
     };
   }, []);
+  useEffect(() => {
+    if(!race) return;
+  if (race?.status === 'started') {
+    // slight delay for safe DOM render
+    setTimeout(() => {
+      inputRef.current?.focus();
+    }, 50);
+  }
+}, [race?.status]);
+
 
   // Update WPM and accuracy
   useEffect(() => {
@@ -129,6 +149,7 @@ const RacePage = () => {
     setStartTime(null);
     setWpm(0);
     setAccuracy(100);
+    setUserRank(null);
   };
 
   const handleInputChange = (e) => {
@@ -200,23 +221,32 @@ const RacePage = () => {
   };
 
   const renderText = () => {
-    return words.map((word, index) => {
-      let className = 'word-box word-pending';
-      
-      if (wordStatuses[index] === 'correct') {
-        className = 'word-box word-correct';
-      } else if (wordStatuses[index] === 'incorrect') {
-        className = 'word-box word-incorrect';
-      } else if (index === currentWordIndex) {
-        className = 'word-box word-current';
-      }
+    const WORDS_PER_VIEW = 20; // Approximately 2 lines
+    const startIndex = Math.floor(currentWordIndex / WORDS_PER_VIEW) * WORDS_PER_VIEW;
+    const visibleWords = words.slice(startIndex, startIndex + WORDS_PER_VIEW);
 
-      return (
-        <span key={index} className={className}>
-          {word}
-        </span>
-      );
-    });
+    return (
+      <div key={startIndex} className="word-container-inner animate-slide-in">
+        {visibleWords.map((word, i) => {
+          const index = startIndex + i;
+          let className = 'word-box word-pending';
+          
+          if (wordStatuses[index] === 'correct') {
+            className = 'word-box word-correct';
+          } else if (wordStatuses[index] === 'incorrect') {
+            className = 'word-box word-incorrect';
+          } else if (index === currentWordIndex) {
+            className = 'word-box word-current';
+          }
+
+          return (
+            <span key={index} className={className}>
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   // Matchmaking lobby
@@ -369,7 +399,7 @@ const RacePage = () => {
           </div>
         </div>
 
-        {race.status === 'started' && (
+        {race.status === 'started' && !userRank && (
           <div className="card mb-6">
             <div className="flex justify-around mb-4">
               <div className="text-center">
@@ -405,14 +435,44 @@ const RacePage = () => {
           </div>
         )}
 
-        {race.status === 'finished' && (
+        {userRank && (
+          <div className="card text-center mb-6 animate-slide-in">
+            <h2 className="text-3xl font-bold mb-4">Finished! 🏁</h2>
+            <div className="flex justify-center items-center space-x-8 mb-6">
+              <div>
+                <div className="text-5xl font-black text-primary-600 dark:text-primary-400">
+                  {userRank === 1 ? '1st' : userRank === 2 ? '2nd' : userRank === 3 ? '3rd' : `${userRank}th`}
+                </div>
+                <div className="text-sm uppercase tracking-widest text-gray-500">Rank</div>
+              </div>
+              <div className="h-12 w-px bg-gray-200 dark:bg-gray-700"></div>
+              <div>
+                <div className="text-4xl font-bold">{wpm}</div>
+                <div className="text-sm uppercase tracking-widest text-gray-500">WPM</div>
+              </div>
+              <div className="h-12 w-px bg-gray-200 dark:bg-gray-700"></div>
+              <div>
+                <div className="text-4xl font-bold">{accuracy}%</div>
+                <div className="text-sm uppercase tracking-widest text-gray-500">Accuracy</div>
+              </div>
+            </div>
+            {race.status !== 'finished' && (
+              <p className="text-gray-600 dark:text-gray-400 animate-pulse">
+                Waiting for others to finish...
+              </p>
+            )}
+            {race.status === 'finished' && (
+              <button onClick={resetRaceState} className="btn-primary mt-4">
+                Back to Lobby
+              </button>
+            )}
+          </div>
+        )}
+
+        {race.status === 'finished' && !userRank && (
           <div className="card text-center">
             <h2 className="text-3xl font-bold mb-6">Race Complete! 🏁</h2>
-            <div className="text-xl mb-4">
-              Winner: <span className="font-bold text-primary-600 dark:text-primary-400">
-                {race.participants.find(p => p.position === 1)?.username}
-              </span> {race.participants.find(p => p.position === 1)?.isBot ? '🤖' : '🏆'}
-            </div>
+            {/* ... fallback for cases where player-finished wasn't caught for some reason */}
             <button onClick={resetRaceState} className="btn-primary">
               Back to Lobby
             </button>

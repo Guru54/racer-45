@@ -102,11 +102,18 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
   const finishTest = () => {
     setIsActive(false);
     const timeTaken = duration - timeLeft;
+    
+    // Calculate final WPM and accuracy at the moment of finish
+    const elapsed = startTime ? (Date.now() - startTime) / 1000 / 60 : 1;
+    const finalWpm = elapsed > 0 ? Math.round(correctWords / elapsed) : 0;
+    const totalTyped = correctWords + incorrectWords;
+    const finalAccuracy = totalTyped > 0 ? Math.round((correctWords / totalTyped) * 100) : 100;
+    
     onComplete({
-      wpm,
-      accuracy,
+      wpm: finalWpm,
+      accuracy: finalAccuracy,
       errors: incorrectWords,
-      duration: timeTaken,
+      duration: timeTaken > 0 ? timeTaken : 1,
       textContent: text
     });
   };
@@ -128,23 +135,32 @@ const TypingArena = ({ text, onComplete, duration = 60 }) => {
   };
 
   const renderText = () => {
-    return words.map((word, index) => {
-      let className = 'word-box word-pending';
-      
-      if (wordStatuses[index] === 'correct') {
-        className = 'word-box word-correct';
-      } else if (wordStatuses[index] === 'incorrect') {
-        className = 'word-box word-incorrect';
-      } else if (index === currentWordIndex) {
-        className = 'word-box word-current';
-      }
+    const WORDS_PER_VIEW = 20; // Approximately 2 lines
+    const startIndex = Math.floor(currentWordIndex / WORDS_PER_VIEW) * WORDS_PER_VIEW;
+    const visibleWords = words.slice(startIndex, startIndex + WORDS_PER_VIEW);
 
-      return (
-        <span key={index} className={className}>
-          {word}
-        </span>
-      );
-    });
+    return (
+      <div key={startIndex} className="word-container-inner animate-slide-in">
+        {visibleWords.map((word, i) => {
+          const index = startIndex + i;
+          let className = 'word-box word-pending';
+          
+          if (wordStatuses[index] === 'correct') {
+            className = 'word-box word-correct';
+          } else if (wordStatuses[index] === 'incorrect') {
+            className = 'word-box word-incorrect';
+          } else if (index === currentWordIndex) {
+            className = 'word-box word-current';
+          }
+
+          return (
+            <span key={index} className={className}>
+              {word}
+            </span>
+          );
+        })}
+      </div>
+    );
   };
 
   return (
